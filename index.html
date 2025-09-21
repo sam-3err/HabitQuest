@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Voice To‑Do — Browser Speech API Demo</title>
+     <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🎙️ Voice To‑Do (Browser Speech API)</h1>
+      <div class="badge" id="status">Not listening</div>
+    </header>
+
+    <div class="card">
+      <div class="controls">
+        <button id="listenBtn" class="listen">Start listening</button>
+        <button id="speakBtn">Speak tasks</button>
+        <button id="clearBtn">Clear all</button>
+        <div style="flex:1"></div>
+        <div class="small">Use commands: "add &lt;task&gt", "delete &lt;number&gt", "complete &lt;number&gt" or just say the task to add.</div>
+      </div>
+
+      <div class="transcript" id="transcript"></div>
+
+      <div style="margin-top:12px">
+        <input id="manualInput" class="add-input" placeholder="Type a task and press Enter (fallback)" />
+      </div>
+
+      <ul class="tasks" id="taskList"></ul>
+
+      <div class="hint">Tip: If your browser doesn't support voice recognition, use the text input. Supported browsers include Chrome (desktop & Android) and Edge. Speech synthesis (voice output) works in most browsers.</div>
+    </div>
+
+    <footer>Built with Web Speech APIs — speech recognition + speech synthesis. Tasks persist in localStorage.</footer>
+  </div>
+
+  <script>
+    // Feature detection
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+    const synth = window.speechSynthesis || null;
+
+    const statusEl = document.getElementById('status');
+    const listenBtn = document.getElementById('listenBtn');
+    const speakBtn = document.getElementById('speakBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const transcriptEl = document.getElementById('transcript');
+    const taskListEl = document.getElementById('taskList');
+    const manualInput = document.getElementById('manualInput');
+
+    let recognition = null;
+    let listening = false;
+
+    // tasks stored as [{id, title, done, created}]
+    let tasks = JSON.parse(localStorage.getItem('voice_todo_tasks') || '[]');
+
+    function save(){ localStorage.setItem('voice_todo_tasks', JSON.stringify(tasks)); }
+
+    function render(){
+      taskListEl.innerHTML = '';
+      tasks.forEach((t, i) => {
+        const li = document.createElement('li'); li.className = 'task' + (t.done? ' done':'');
+        const left = document.createElement('div'); left.className='left';
+        const cb = document.createElement('input'); cb.type='checkbox'; cb.checked = t.done;
+        cb.addEventListener('change', ()=>{ tasks[i].done = cb.checked; save(); render(); });
+        const title = document.createElement('div'); title.className='title'; title.innerText = t.title;
+        const meta = document.createElement('div'); meta.className='meta'; meta.innerText = new Date(t.created).toLocaleString();
+        left.appendChild(cb); left.appendChild(title); left.appendChild(meta);
+
+        const right = document.createElement('div'); right.className='right-actions';
+        const del = document.createElement('button'); del.innerText='Delete'; del.addEventListener('click', ()=>{ tasks.splice(i,1); save(); render(); });
+        const edit = document.createElement('button'); edit.innerText='Edit'; edit.addEventListener('click', ()=>{ const nv = prompt('Edit task', t.title); if(nv!=null){ tasks[i].title = nv.trim(); save(); render(); }});
+        right.appendChild(edit); right.appendChild(del);
+
+        li.appendChild(left); li.appendChild(right);
+        taskListEl.appendChild(li);
+      });
+    }
+
+    render();
+
+    function addTask(text){
+      const t = text.trim(); if(!t) return;
+      tasks.unshift({id:Date.now(), title:t, done:false, created: Date.now()});
+      save(); render();
+      speakText('Added: ' + t);
+    }
+
+    function speakText(text){
+      if(!synth) return;
+      if(synth.speaking) synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = navigator.language || 'en-US';
+      synth.speak(u);
+    }
+
+    function parseCommand(text){
+      // simple command parsing
+      const low = text.toLowerCase().trim();
+      // delete <n>
+      const mDel = low.match(/^delete (?:task )?(\d+)$/);
+      if(mDel){ const idx = parseInt(mDel[1],10)-1; if(idx>=0 && idx<tasks.length){ const removed = tasks.splice(idx,1)[0]; save(); render(); speakText('Deleted task ' + (idx+1) + ': ' + removed.title); } else speakText('No task number ' + (idx+1)); return; }
+      const mDone = low.match(/^(?:complete|finish|done) (?:task )?(\d+)$/);
+      if(mDone){ const idx=parseInt(mDone[1],10)-1; if(idx>=0 && idx<tasks.length){ tasks[idx].done = true; save(); render(); speakText('Completed task ' + (idx+1)); } else speakText('No task number ' + (idx+1)); return; }
+      const mAdd = low.match(/^(?:add|add task) (.+)$/);
+      if(mAdd){ addTask(mAdd[1]); return; }
+      // fallback: if it sounds like "one two three" maybe they said a number incorrectly. As fallback, just add
+      addTask(text);
+    }
+
+    // Manual input fallback
+    manualInput.addEventListener('keydown', e=>{
+      if(e.key === 'Enter'){
+        const v = manualInput.value.trim(); if(!v) return; addTask(v); manualInput.value='';
+      }
+    });
+
+    // Speech recognition setup
+    if(SpeechRecognition){
+      recognition = new SpeechRecognition();
+      recognition.continuous = false; // single result at a time
+      recognition.interimResults = false;
+      recognition.lang = navigator.language || 'en-US';
+
+      recognition.addEventListener('start', ()=>{ listening=true; statusEl.innerText='Listening...'; listenBtn.classList.add('active'); listenBtn.innerText='Stop listening'; });
+      recognition.addEventListener('end', ()=>{ listening=false; statusEl.innerText='Not listening'; listenBtn.classList.remove('active'); listenBtn.innerText='Start listening'; });
+      recognition.addEventListener('error', (ev)=>{ console.error('Speech recognition error', ev); transcriptEl.innerText = 'Error: ' + ev.error; speakText('Recognition error ' + ev.error); });
+
+      recognition.addEventListener('result', (ev)=>{
+        const txt = Array.from(ev.results).map(r=>r[0].transcript).join(' ');
+        transcriptEl.innerText = 'Heard: "' + txt + '"';
+        parseCommand(txt);
+      });
+
+      listenBtn.addEventListener('click', ()=>{
+        if(listening){ recognition.stop(); }
+        else{ try{ recognition.start(); }catch(err){ console.warn(err); }}
+      });
+    } else {
+      // No speech recognition support
+      listenBtn.disabled = true; listenBtn.innerText='Speech recognition not supported';
+      statusEl.innerText='No recognition API';
+      listenBtn.addEventListener('click', ()=>{ alert('SpeechRecognition API not supported in this browser. Use the text input instead.'); });
+    }
+
+    // Speak tasks
+    speakBtn.addEventListener('click', ()=>{
+      if(!synth){ alert('Speech synthesis not supported in this browser.'); return; }
+      if(tasks.length===0){ speakText('Your to do list is empty.'); return; }
+      const lines = tasks.map((t, i) => `${i+1}. ${t.title}${t.done? ', completed':''}`);
+      speakText('You have ' + tasks.length + ' tasks. ' + lines.join('. '));
+    });
+
+    // Clear all
+    clearBtn.addEventListener('click', ()=>{
+      if(!confirm('Clear all tasks?')) return; tasks = []; save(); render(); speakText('Cleared all tasks');
+    });
+
+    // Small helper: stop synthesis when page hides
+    document.addEventListener('visibilitychange', ()=>{ if(document.hidden && synth && synth.speaking) synth.cancel(); });
+
+    // Expose for debugging in console
+    window.voiceTodo = {tasks, addTask, parseCommand};
+  </script>
+</body>
+</html>
