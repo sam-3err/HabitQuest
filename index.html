@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HabitQuest Tracker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header & Stats -->
+        <header>
+            <h1>HabitQuest</h1>
+            <div class="stats">
+                <p>Level: <span id="level">1</span></p>
+                <p>Points: <span id="points">0</span></p>
+                <p>Coins: <span id="coins">0</span></p>
+            </div>
+        </header>
+
+        <!-- Quest Map -->
+        <div class="quest-map">
+            <div class="avatar" id="avatar"></div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar" id="questProgress"></div>
+            </div>
+        </div>
+
+        <!-- Achievements -->
+        <div class="achievements">
+            <h2>Badges</h2>
+            <div id="badgeList"></div>
+        </div>
+
+        <!-- Habits List -->
+        <main>
+            <h2>Today's Habits</h2>
+            <ul id="habitList"></ul>
+            <button id="addHabitBtn">Add New Habit</button>
+        </main>
+
+        <!-- Loot Chest -->
+        <div class="loot-chest">
+            <button id="openChest">Open Loot Chest 🎁</button>
+        </div>
+
+        <footer>
+            <p>© 2025 HabitQuest</p>
+        </footer>
+    </div>
+
+    <!-- Modal for Adding Habit -->
+    <div id="habitModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Add New Habit</h2>
+            <input type="text" id="habitName" placeholder="Habit Name">
+            <select id="habitDifficulty">
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+            </select>
+            <button id="saveHabit">Save Habit</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
